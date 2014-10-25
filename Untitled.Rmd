@@ -1,0 +1,149 @@
+---
+title: "Practical Machine Learning Project"
+author: 
+date: "October 24, 2014"
+output: html_document
+---
+
+### Problem 
+In this project, a predictive model for human activity recognition is built from data on how accurately an exercise is performed. Specifically, the model determines how well a Unilateral Dumbbell Biceps Curl is performed, given five classes of quality for performing the exercise.
+
+The data were obtained from 
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. **Qualitative Activity Recognition of Weight Lifting Exercises**. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+### Procedure
+
+After reading in the data, an exploratory data analysis was performed, which suggested the removal of certain variables from the set of possible predictors. Having done this, the variables that were highly correlated with each other were identified, and also those which explained most of the variability within the data via Principal Components Analysis. It was determined that most of the variability in the data was explained by the first 10 principal components, and these were used to fit a random tree model to a subset of the training data. The resulting model was evaluated with the complement of training set for its predictive strengths, and out of sample error rates. 
+
+1. Reading in the data
+```{r, message=FALSE}
+rm(list = ls())
+packages<-c("ggplot2", "randomForest", "caret", "rattle")
+sapply(packages, require, character.only = TRUE, quietly =T)
+getdata<-function(fileUrl, dir, filename, ext){
+        # create directory, if it is not already present
+        dirName<-paste(dir, sep = "")
+        if(!file.exists(dirName)){
+                dir.create(path = dirName)
+        }
+        # Get the data, unless this step has already been done
+        dest<-paste("./", dirName,"/", filename, ext, sep = "")
+        if(!file.exists(dest)){
+                download.file(url = fileUrl, 
+                              destfile = dest, 
+                              method = "curl") 
+                datedownloaded<-date()
+        }
+        dest
+}
+trainingURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainingdata<-getdata(fileUrl = trainingURL, 
+                      dir = "activityData", 
+                      filename = "training", 
+                      ext = ".csv")
+if(!exists("training")){
+        training<-read.csv(trainingdata,
+                           header = T,
+                           sep = ",",
+                           na.strings = c("NA", "") )
+}
+testingdata<-getdata(fileUrl = testingURL, 
+                     dir = "activityData", 
+                     filename = "testing", ext = ".csv")
+if(!exists("testing")){
+        testing<-read.csv(testingdata, 
+                          sep = ",",
+                          na.strings = c("NA", "") )
+}
+# dimensions of the test and training data
+c(dim(training), dim(testing))
+```
+
+2. Exploratory Data Analysis, and discarding of certain variables
+
+```{r}
+# identify how many columns are sparse
+table(apply(training, 2, function(x) length(which(!is.na(x)))))
+# obtain a vector of column names that are non-sparse
+nums<-apply(training, 2, function(x) length(which(!is.na(x))))
+keepnames<-names(nums)[nums>406]
+colNums<-match(keepnames, names(training))
+# subset the training data to remove columns that give only identification and time stamp information, and keep the columns computed in the previous step
+training<-training[,keepnames]
+training<-training[,-c(1:7)]
+table(apply(training, 2, function(x) length(which(!is.na(x)))))
+dim(training)
+```
+
+3. Identification of highly correlated variables and the most influential principal components
+
+```{r}
+## identify the variables that have a high correlation with each other
+
+# find the variables which are highly correlated
+corMat<-abs(cor(training[,-53]))
+diag(corMat)<-0
+# list the names of highly correlated variables
+which(x = corMat > 0.9, arr.ind = T)
+# obtain the principal components of the training set
+prComp<-prcomp(training[, -53])
+# view the amount of varaiblity explained by the principal components
+plot(prComp, type="lines")
+```
+
+4. Building the predictive model, based on the top ten most influential PCs. The training set is split into a smaller training set and its complement for cross validation. A random forest was built on this smaller training set, while the smaller test set was put aside until the evaluation phase  
+
+```{r}
+set.seed(123)
+# partition the data into a smaller training and test set
+inds<-createDataPartition(y = training$classe, p = 0.75, list = F)
+smallTraining<-training[inds,]
+smallTesting<-training[-inds,]
+# obtain the ten most significant principal components
+preProc<-preProcess(x = smallTraining[, -53], 
+                    method = "pca", 
+                    pcaComp = 10)
+# fit the principal components to the training data 
+trainPC<-predict(preProc, smallTraining[,-53])
+## build a model for predicting exercise class from the PC model with 5-fold cross validation
+
+# fit  random forest model
+forestFit<-train(smallTraining$classe ~., 
+              method = "rf", 
+              data = trainPC, 
+              proximity = T, 
+              trControl = trainControl(method = "cv", 
+                                       number = 5, 
+                                       allowParallel = T)
+              )
+forestFit
+plot(forestFit$finalModel)
+```
+
+5. Evaluating the fit model
+The computed model has an in-sample accuracy of 94.8%, but this is optimistic. It was it was tested against the training set
+
+```{r}
+smallTestingPC<-predict(preProc, smallTesting[, -53])
+confusionMatrix(smallTesting$classe, predict(forestFit, smallTestingPC))
+```
+Testing against the test set allows us to say with 95% confidence that the accuracy of the model is between 94.42% and 95.65%, which seems fairly good. The out of sample error rate is 
+
+```{r}
+1-.948
+```
+
+Testing against the downloaded testing set 
+```{r}
+# preprocess the testing set in the same way as the training set 
+testing<-testing[, colNums]
+testing<-testing[, -c(1:7)]
+bigTestingPC<-predict(preProc, testing[, -53])
+# predict the exercise class
+answers<-predict(object = forestFit, bigTestingPC)
+answers
+```
+
+Of the twenty predicted values, eighteen were correct. 
