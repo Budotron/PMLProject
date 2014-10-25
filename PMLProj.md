@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ### Problem 
+
 In this project, a predictive model for human activity recognition is built from data on how accurately an exercise is performed. Specifically, the model determines how well a Unilateral Dumbbell Biceps Curl is performed, given five classes of quality for performing the exercise.
 
 The data were obtained from 
@@ -161,7 +162,9 @@ plot(prComp, type="lines")
 
 ![plot of chunk unnamed-chunk-3](figure/unnamed-chunk-3.png) 
 
-4. Building the predictive model, based on the top ten most influential PCs. The training set is split into a smaller training set and its complement for cross validation. A random forest was built on this smaller training set, while the smaller test set was put aside until the evaluation phase  
+The amount of variablility explained by each principal component can be seen to rapidly decrease, becoming negligible after the 10th principal component. 
+
+4. Building the predictive model, based on the top ten most influential PCs. This leads to dimensionalility reduction, and reduces the computational time. The training set is split into a smaller training set and its complement for cross validation. A random forest was built on this smaller training set, while the smaller test set was put aside until the evaluation phase  
 
 
 ```r
@@ -261,15 +264,15 @@ confusionMatrix(smallTesting$classe, predict(forestFit, smallTestingPC))
 ## Detection Prevalence    0.284    0.194    0.174    0.164    0.184
 ## Balanced Accuracy       0.977    0.973    0.940    0.964    0.987
 ```
-Testing against the test set allows us to say with 95% confidence that the accuracy of the model is between 94.42% and 95.65%, which seems fairly good. The out of sample error rate is 
+Testing against the test set allows us to say with 95% confidence that the accuracy of the model is between 94.4% and 95.6%, which seems fairly good. The out of sample error rate is 
 
 
 ```r
-1-.948
+c(1-.944, 1-.956)
 ```
 
 ```
-## [1] 0.052
+## [1] 0.056 0.044
 ```
 
 Testing against the downloaded testing set 
@@ -289,4 +292,8 @@ answers
 ## Levels: A B C D E
 ```
 
-Of the twenty predicted values, eighteen were correct. 
+Of the twenty predicted values, eighteen were classified correctly, which is what would be expected with an accuracy rate of 95%. 
+
+### Summary
+
+Ninety-five percent of the time, the random forest constructed with the ten most influential principal components predicts the exercise class with an accuracy of between 94.4% and 95.7%, with an out of sample error rate of between 4.4% and 5.6%. Whether the 95% prediction accuracy is "good enough" is subjective; it can be improved by increasing the number of features included in the model, but doing this will result in an increase in the computational time required. 
